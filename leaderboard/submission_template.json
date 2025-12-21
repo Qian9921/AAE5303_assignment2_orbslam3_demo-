@@ -1,0 +1,11 @@
+{
+    "group_id": "YOUR_GROUP_ID",
+    "group_name": "Your Group Name",
+    "metrics": {
+        "ate": 0.0000,
+        "rpe": 0.0000,
+        "scale_error": 0.00
+    },
+    "submission_date": "YYYY-MM-DD"
+}
+
