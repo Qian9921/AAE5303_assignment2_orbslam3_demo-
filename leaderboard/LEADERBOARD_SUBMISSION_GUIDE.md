@@ -2,7 +2,9 @@
 
 ## 📁 Evaluation Dataset
 
-**HKisland_GNSS03** sequence from MARS-LVIG / UAVScenes Dataset
+The evaluation dataset (bag / images / ground truth) is provided by the instructor.
+
+The leaderboard expects an estimated trajectory in **TUM format** and computes metrics against the provided **ground truth**.
 
 | Resource | Link |
 |----------|------|
@@ -15,9 +17,19 @@
 
 | Metric | Direction | Unit | Description |
 |--------|-----------|------|-------------|
-| **ATE** | ↓ Lower is better | meters (m) | Absolute Trajectory Error - RMSE after Sim(3) alignment |
-| **RPE** | ↓ Lower is better | meters (m) | Relative Pose Error - Local consistency over 10 frames |
-| **Scale Error** | ↓ Lower is better | percentage (%) | Scale drift for monocular VO |
+| **ATE RMSE** | ↓ Lower is better | meters (m) | Global accuracy after Sim(3) alignment + scale correction |
+| **RPE Trans Drift** | ↓ Lower is better | meters per meter (m/m) | Translation drift rate (distance-based RPE) |
+| **RPE Rot Drift** | ↓ Lower is better | degrees per 100 meters (deg/100m) | Rotation drift rate (distance-based RPE) |
+| **Completeness** | ↑ Higher is better | percent (%) | Matched poses / total ground-truth poses |
+
+### Fixed Evaluation Parameters
+
+To make submissions comparable, the leaderboard uses the following fixed parameters:
+
+- **Trajectory format**: TUM (`t tx ty tz qx qy qz qw`)
+- **Timestamp association**: `t_max_diff = 0.1 s`
+- **Alignment**: Sim(3) with scale correction (`--align --correct_scale`)
+- **RPE delta**: `delta = 10 m` (distance domain)
 
 ---
 
@@ -30,9 +42,10 @@ Submit your results using the following JSON format:
     "group_id": "YOUR_GROUP_ID",
     "group_name": "Your Group Name",
     "metrics": {
-        "ate": 2.5335,
-        "rpe": 1.7309,
-        "scale_error": 8.38
+        "ate_rmse_m": 88.2281,
+        "rpe_trans_drift_m_per_m": 2.04084,
+        "rpe_rot_drift_deg_per_100m": 76.69911,
+        "completeness_pct": 95.73
     },
     "submission_date": "YYYY-MM-DD"
 }
@@ -44,9 +57,10 @@ Submit your results using the following JSON format:
 |-------|------|-------------|---------|
 | `group_id` | string | Your group ID | `"Group_01"` |
 | `group_name` | string | Your group name | `"Team Alpha"` |
-| `metrics.ate` | number | ATE RMSE in meters | `2.5335` |
-| `metrics.rpe` | number | RPE Trans RMSE in meters | `1.7309` |
-| `metrics.scale_error` | number | Scale error in percentage | `8.38` |
+| `metrics.ate_rmse_m` | number | ATE RMSE in meters | `88.2281` |
+| `metrics.rpe_trans_drift_m_per_m` | number | Translation drift rate | `2.04084` |
+| `metrics.rpe_rot_drift_deg_per_100m` | number | Rotation drift rate | `76.69911` |
+| `metrics.completeness_pct` | number | Completeness percentage | `95.73` |
 | `submission_date` | string | Date (YYYY-MM-DD) | `"2024-12-22"` |
 
 ### File Naming Convention
@@ -57,9 +71,24 @@ Example: `Group_01_leaderboard.json`
 
 ---
 
+## ✅ Trajectory Requirements (read this before evaluating)
+
+- Use **`CameraTrajectory.txt`** (full-frame trajectory), not `KeyFrameTrajectory.txt`.
+- Ensure your file is valid **TUM format**: `t tx ty tz qx qy qz qw` with timestamps in seconds.
+
+For a practical “do this, avoid that” guide, see:
+
+- `ORB_SLAM3_TIPS.md`
+
+This guide includes repository-specific pointers (e.g., the `Mono_Compressed` ROS node path) and the most common failure modes.
+
+---
+
 ## 🔢 Metric Calculation
 
-### 1. ATE (Absolute Trajectory Error)
+This section describes how to compute the metrics **locally** in a way that matches the leaderboard.
+
+### 1. ATE RMSE (Sim(3) aligned, scale corrected)
 
 ```python
 # After Sim(3) alignment
@@ -67,25 +96,56 @@ errors = np.linalg.norm(P_gt - P_aligned, axis=1)
 ate = np.sqrt(np.mean(errors ** 2))  # RMSE in meters
 ```
 
-### 2. RPE (Relative Pose Error)
+Recommended `evo` command:
 
-```python
-# Over 10-frame intervals
-for i in range(len(P_gt) - 10):
-    gt_rel = P_gt[i + 10] - P_gt[i]
-    est_rel = P_est[i + 10] - P_est[i]
-    error = np.linalg.norm(gt_rel - est_rel)
-rpe = np.sqrt(np.mean(errors ** 2))  # RMSE in meters
+```bash
+evo_ape tum ground_truth.txt CameraTrajectory.txt \
+  --align --correct_scale \
+  --t_max_diff 0.1 -va
 ```
 
-### 3. Scale Error
+### 2. RPE Translation Drift (m/m)
 
 ```python
-# Path length comparison (before alignment)
-gt_length = sum of segment lengths in ground truth
-est_length = sum of segment lengths in estimated trajectory
-scale_error = abs(1 - est_length / gt_length) * 100  # Percentage
+# Over a distance interval of delta_d meters (delta_d = 10 m)
+# evo reports mean RPE in meters over delta_d
+rpe_trans_drift_m_per_m = rpe_trans_mean_m / delta_d
 ```
+
+Recommended `evo` command:
+
+```bash
+evo_rpe tum ground_truth.txt CameraTrajectory.txt \
+  --align --correct_scale \
+  --t_max_diff 0.1 \
+  --delta 10 --delta_unit m \
+  --pose_relation trans_part -va
+```
+
+### 3. RPE Rotation Drift (deg/100m)
+
+```python
+# evo reports mean rotation angle error in degrees over delta_d
+rpe_rot_drift_deg_per_100m = (rpe_rot_mean_deg / delta_d) * 100.0
+```
+
+Recommended `evo` command:
+
+```bash
+evo_rpe tum ground_truth.txt CameraTrajectory.txt \
+  --align --correct_scale \
+  --t_max_diff 0.1 \
+  --delta 10 --delta_unit m \
+  --pose_relation angle_deg -va
+```
+
+### 4. Completeness (%)
+
+```python
+completeness_pct = matched_poses / gt_poses * 100.0
+```
+
+Here, `matched_poses` is the number of pose pairs successfully associated by evo under `t_max_diff`.
 
 ---
 

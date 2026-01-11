@@ -2,9 +2,10 @@
     "group_id": "YOUR_GROUP_ID",
     "group_name": "Your Group Name",
     "metrics": {
-        "ate": 0.0000,
-        "rpe": 0.0000,
-        "scale_error": 0.00
+        "ate_rmse_m": 0.0,
+        "rpe_trans_drift_m_per_m": 0.0,
+        "rpe_rot_drift_deg_per_100m": 0.0,
+        "completeness_pct": 0.0
     },
     "submission_date": "YYYY-MM-DD"
 }

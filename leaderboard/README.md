@@ -1,393 +1,129 @@
-# 🏆 AAE5303 Visual Odometry - Leaderboard
+# 🏆 AAE5303 Visual Odometry – Leaderboard
 
-## 📁 Evaluation Dataset
+This folder contains the **student-facing** leaderboard specification:
 
-**HKisland_GNSS03** sequence from MARS-LVIG / UAVScenes Dataset
+- What to submit
+- Which metrics are used (four *parallel* metrics, no weighting)
+- The fixed evaluation protocol (association + alignment), so results are comparable across teams
 
-| Resource | Link |
-|----------|------|
-| MARS-LVIG Dataset | https://mars.hku.hk/dataset.html |
-| UAVScenes GitHub | https://github.com/sijieaaa/UAVScenes |
+If you are looking for a “how to run ORB-SLAM3 without pitfalls” guide, see:
 
----
+- `ORB_SLAM3_TIPS.md`
 
-## 📊 Evaluation Metrics
+## 📌 What you submit
 
-The leaderboard evaluates Visual Odometry submissions using three standard trajectory accuracy metrics. All metrics are computed by comparing **estimated trajectory** against **RTK ground truth**.
+Submit **one JSON file per group**:
 
----
+- File name: `{GroupID}_leaderboard.json`
+- Format template: `submission_template.json`
 
-### 1. ATE (Absolute Trajectory Error) ↓
+The leaderboard will parse your JSON file and display rankings **separately for each metric**.
 
-**Lower is better** | Unit: meters (m)
+## 📊 Metrics (four parallel metrics)
 
-#### Definition
+All metrics are computed by comparing an **estimated TUM trajectory** against the **provided ground truth**, using a fixed evaluation protocol (alignment + association).
 
-ATE measures the root mean square error (RMSE) of the estimated trajectory after optimal Sim(3) alignment to the ground truth. It represents the overall trajectory accuracy including cumulative drift.
+| Metric | Direction | Unit | Description |
+|--------|-----------|------|-------------|
+| **ATE RMSE** | ↓ | m | Global accuracy after Sim(3) alignment + scale correction |
+| **RPE Trans Drift** | ↓ | m/m | Translation drift rate (distance-based RPE, delta = 10 m) |
+| **RPE Rot Drift** | ↓ | deg/100m | Rotation drift rate (distance-based RPE, delta = 10 m) |
+| **Completeness** | ↑ | % | Matched poses / total ground-truth poses |
 
-#### Mathematical Formula
+### What each metric measures (intuition)
 
-$$ATE_{RMSE} = \sqrt{\frac{1}{N}\sum_{i=1}^{N}\|\mathbf{p}_{est}^i - \mathbf{p}_{gt}^i\|^2}$$
+#### ATE RMSE (m)
 
-where:
-- $\mathbf{p}_{est}^i$ = Aligned estimated position at time $i$
-- $\mathbf{p}_{gt}^i$ = Ground truth position at time $i$
-- $N$ = Number of matched poses
+Absolute Trajectory Error measures the **global** discrepancy between the estimated trajectory and the ground truth **after** applying a single best-fit Sim(3) transform (rotation + translation + scale).
 
-The alignment uses Sim(3) transformation (7-DOF: 3 translation + 3 rotation + 1 scale) to optimally align the estimated trajectory to ground truth before computing errors.
+- Good ATE → your *overall* trajectory shape is close to ground truth.
+- Bad ATE → strong accumulated drift, wrong relocalization, or inconsistent tracking.
 
-#### Reference Code
+#### RPE translation drift (m/m)
 
-```python
-import numpy as np
+Relative Pose Error (translation) is computed over a fixed distance interval (10 m). `evo` reports mean translation error in meters over that interval, which we normalize into a drift rate:
 
-def compute_ate(P_gt: np.ndarray, P_aligned: np.ndarray) -> float:
-    """
-    Compute Absolute Trajectory Error (ATE) RMSE.
-    
-    Args:
-        P_gt: Nx3 ground truth positions (after association)
-        P_aligned: Nx3 aligned estimated positions
-    
-    Returns:
-        ATE RMSE in meters
-    """
-    # Compute Euclidean distance errors
-    errors = np.linalg.norm(P_gt - P_aligned, axis=1)
-    
-    # Return RMSE
-    ate_rmse = np.sqrt(np.mean(errors ** 2))
-    
-    return ate_rmse
+```text
+RPE_trans_drift_m_per_m = RPE_trans_mean_m / 10
 ```
 
-#### Reference
+This metric emphasizes **local drift** rather than cumulative error.
 
-Sturm, J., et al. "A Benchmark for the Evaluation of RGB-D SLAM Systems", IROS 2012.
+#### RPE rotation drift (deg/100m)
 
----
+Relative Pose Error (rotation) uses the rotation angle error in degrees over the same 10 m distance interval, normalized as:
 
-### 2. RPE (Relative Pose Error) ↓
-
-**Lower is better** | Unit: meters (m)
-
-#### Definition
-
-RPE measures the local consistency of the trajectory by comparing relative transformations between the estimated and ground truth trajectories over a fixed time interval (delta). It evaluates drift rate rather than cumulative error.
-
-#### Mathematical Formula
-
-$$RPE_{trans} = \sqrt{\frac{1}{M}\sum_{i=1}^{M}\|\Delta\mathbf{p}_{est}^i - \Delta\mathbf{p}_{gt}^i\|^2}$$
-
-where:
-- $\Delta\mathbf{p}^i = \mathbf{p}(t_i + \Delta) - \mathbf{p}(t_i)$ = Relative motion over interval $\Delta$
-- $M$ = Number of relative pose pairs
-
-#### Reference Code
-
-```python
-import numpy as np
-
-def compute_rpe(P_gt: np.ndarray, P_est: np.ndarray, delta: int = 10) -> float:
-    """
-    Compute Relative Pose Error (RPE) translational RMSE.
-    
-    Args:
-        P_gt: Nx3 ground truth positions
-        P_est: Nx3 estimated positions (aligned)
-        delta: Frame interval for relative motion computation
-    
-    Returns:
-        RPE translational RMSE in meters
-    """
-    n = len(P_gt)
-    trans_errors = []
-    
-    for i in range(n - delta):
-        # Ground truth relative motion
-        gt_rel = P_gt[i + delta] - P_gt[i]
-        
-        # Estimated relative motion
-        est_rel = P_est[i + delta] - P_est[i]
-        
-        # Compute error
-        error = np.linalg.norm(gt_rel - est_rel)
-        trans_errors.append(error)
-    
-    # Return RMSE
-    rpe_rmse = np.sqrt(np.mean(np.array(trans_errors) ** 2))
-    
-    return rpe_rmse
+```text
+RPE_rot_drift_deg_per_100m = (RPE_rot_mean_deg / 10) * 100
 ```
 
-#### Reference
+Large values typically indicate unstable orientation estimates and/or poor feature geometry.
 
-Geiger, A., et al. "Vision meets Robotics: The KITTI Dataset", IJRR 2013.
+#### Completeness (%)
 
----
+Completeness measures how much of the ground-truth trajectory can be evaluated:
 
-### 3. Scale Error ↓
-
-**Lower is better** | Unit: percentage (%)
-
-#### Definition
-
-For monocular Visual Odometry, absolute scale is unobservable (scale ambiguity). Scale Error measures how accurately the VO system estimates the trajectory scale by comparing path lengths.
-
-#### Mathematical Formula
-
-$$Scale_{error} = |1 - \frac{L_{est}}{L_{gt}}| \times 100\%$$
-
-where:
-- $L_{est}$ = Total path length of estimated trajectory (before alignment)
-- $L_{gt}$ = Total path length of ground truth trajectory
-
-$$L = \sum_{i=1}^{N-1}\|\mathbf{p}^{i+1} - \mathbf{p}^i\|$$
-
-#### Reference Code
-
-```python
-import numpy as np
-
-def compute_scale_error(P_gt: np.ndarray, P_est_unaligned: np.ndarray) -> float:
-    """
-    Compute Scale Error for monocular VO.
-    
-    Args:
-        P_gt: Nx3 ground truth positions
-        P_est_unaligned: Nx3 estimated positions (before Sim3 alignment)
-    
-    Returns:
-        Scale error in percentage
-    """
-    # Compute total path lengths
-    gt_segments = np.diff(P_gt, axis=0)
-    est_segments = np.diff(P_est_unaligned, axis=0)
-    
-    gt_length = np.sum(np.linalg.norm(gt_segments, axis=1))
-    est_length = np.sum(np.linalg.norm(est_segments, axis=1))
-    
-    # Scale ratio
-    scale_ratio = est_length / gt_length
-    
-    # Scale error (percentage)
-    scale_error = abs(1.0 - scale_ratio) * 100.0
-    
-    return scale_error
+```text
+Completeness (%) = matched_poses / gt_poses * 100
 ```
 
-#### Interpretation
+This discourages submissions that only output a short “easy” segment.
 
-| Scale Error | Interpretation |
-|-------------|----------------|
-| < 5% | Excellent scale estimation |
-| 5-10% | Good scale estimation |
-| 10-15% | Acceptable |
-| > 15% | Poor scale estimation |
+### Fixed evaluation parameters
 
----
+- **Trajectory format**: TUM (`t tx ty tz qx qy qz qw`)
+- **Timestamp association**: `t_max_diff = 0.1 s`
+- **Alignment**: Sim(3) with scale correction (`--align --correct_scale`)
+- **RPE delta**: `delta = 10 m` (distance domain)
 
-## 📦 Complete Evaluation Script
+### Why Sim(3) alignment is required for monocular VO
 
-Use this script to compute all three metrics for your submission:
+Monocular VO cannot observe absolute metric scale. Without Sim(3) alignment, metrics would be dominated by an arbitrary scale factor. Using Sim(3) with scale correction makes the metrics reflect:
 
-```python
-#!/usr/bin/env python3
-"""
-AAE5303 Visual Odometry Leaderboard - Metrics Calculation Script
-"""
+- Trajectory **shape** consistency
+- Drift and tracking quality
 
-import numpy as np
-import json
-from datetime import date
+rather than the unknown global scale.
 
-def load_trajectory_tum(filename: str):
-    """
-    Load trajectory from TUM format file.
-    Format: timestamp x y z qx qy qz qw
-    
-    Returns:
-        timestamps: Nx1 array
-        positions: Nx3 array
-    """
-    data = np.loadtxt(filename)
-    timestamps = data[:, 0]
-    positions = data[:, 1:4]
-    return timestamps, positions
+## ✅ How to compute the same numbers locally
 
+See `LEADERBOARD_SUBMISSION_GUIDE.md` for:
 
-def associate_trajectories(t_gt, t_est, max_time_diff=0.02):
-    """Associate ground truth and estimated trajectories by timestamp."""
-    matches = []
-    for i, t_e in enumerate(t_est):
-        time_diffs = np.abs(t_gt - t_e)
-        min_idx = np.argmin(time_diffs)
-        if time_diffs[min_idx] < max_time_diff:
-            matches.append((min_idx, i))
-    return matches
+- The exact `evo` commands used by the leaderboard
+- How to compute drift rates from evo outputs
+- The JSON schema and an example submission
 
-
-def align_trajectories_sim3(P_gt, P_est):
-    """Align estimated trajectory to ground truth using Sim(3)."""
-    # Center point clouds
-    centroid_gt = np.mean(P_gt, axis=0)
-    centroid_est = np.mean(P_est, axis=0)
-    
-    P_gt_centered = P_gt - centroid_gt
-    P_est_centered = P_est - centroid_est
-    
-    # Compute scale
-    scale = np.sqrt(np.sum(P_gt_centered ** 2) / np.sum(P_est_centered ** 2))
-    P_est_scaled = P_est_centered * scale
-    
-    # Compute rotation using SVD
-    H = P_est_scaled.T @ P_gt_centered
-    U, S, Vt = np.linalg.svd(H)
-    R = Vt.T @ U.T
-    if np.linalg.det(R) < 0:
-        Vt[-1, :] *= -1
-        R = Vt.T @ U.T
-    
-    # Compute translation
-    t = centroid_gt - scale * (R @ centroid_est)
-    
-    # Apply transformation
-    P_aligned = scale * (P_est @ R.T) + t
-    
-    return P_aligned, scale
-
-
-def compute_ate(P_gt, P_aligned):
-    """Compute Absolute Trajectory Error RMSE."""
-    errors = np.linalg.norm(P_gt - P_aligned, axis=1)
-    return np.sqrt(np.mean(errors ** 2))
-
-
-def compute_rpe(P_gt, P_est, delta=10):
-    """Compute Relative Pose Error translational RMSE."""
-    trans_errors = []
-    for i in range(len(P_gt) - delta):
-        gt_rel = P_gt[i + delta] - P_gt[i]
-        est_rel = P_est[i + delta] - P_est[i]
-        trans_errors.append(np.linalg.norm(gt_rel - est_rel))
-    return np.sqrt(np.mean(np.array(trans_errors) ** 2))
-
-
-def compute_scale_error(P_gt, P_est_unaligned):
-    """Compute Scale Error percentage."""
-    gt_length = np.sum(np.linalg.norm(np.diff(P_gt, axis=0), axis=1))
-    est_length = np.sum(np.linalg.norm(np.diff(P_est_unaligned, axis=0), axis=1))
-    return abs(1.0 - est_length / gt_length) * 100.0
-
-
-def evaluate_trajectory(gt_file: str, est_file: str) -> dict:
-    """
-    Evaluate estimated trajectory against ground truth.
-    
-    Args:
-        gt_file: Path to ground truth trajectory (TUM format)
-        est_file: Path to estimated trajectory (TUM format)
-    
-    Returns:
-        Dictionary with metrics
-    """
-    # Load trajectories
-    t_gt, P_gt = load_trajectory_tum(gt_file)
-    t_est, P_est = load_trajectory_tum(est_file)
-    
-    # Associate by timestamp
-    matches = associate_trajectories(t_gt, t_est)
-    
-    gt_indices = [m[0] for m in matches]
-    est_indices = [m[1] for m in matches]
-    P_gt_matched = P_gt[gt_indices]
-    P_est_matched = P_est[est_indices]
-    P_est_unaligned = P_est_matched.copy()
-    
-    # Align using Sim(3)
-    P_aligned, scale = align_trajectories_sim3(P_gt_matched, P_est_matched)
-    
-    # Compute metrics
-    ate = compute_ate(P_gt_matched, P_aligned)
-    rpe = compute_rpe(P_gt_matched, P_aligned)
-    scale_error = compute_scale_error(P_gt_matched, P_est_unaligned)
-    
-    return {
-        'ate': round(ate, 4),
-        'rpe': round(rpe, 4),
-        'scale_error': round(scale_error, 2)
-    }
-
-
-def generate_submission_json(group_id: str, group_name: str, metrics: dict, output_path: str):
-    """Generate submission JSON file."""
-    submission = {
-        "group_id": group_id,
-        "group_name": group_name,
-        "metrics": metrics,
-        "submission_date": str(date.today())
-    }
-    
-    with open(output_path, 'w') as f:
-        json.dump(submission, f, indent=4)
-    
-    print(f"Submission saved to: {output_path}")
-    print(json.dumps(submission, indent=4))
-
-
-# Example usage:
-if __name__ == "__main__":
-    # Calculate metrics
-    metrics = evaluate_trajectory(
-        gt_file="./rtk_groundtruth.txt",
-        est_file="./KeyFrameTrajectory.txt"
-    )
-    
-    # Generate submission JSON
-    generate_submission_json(
-        group_id="Group_01",
-        group_name="Your Group Name",
-        metrics=metrics,
-        output_path="Group_01_leaderboard.json"
-    )
-```
-
----
-
-## 📄 Submission Format
-
-Submit a JSON file with the following format:
+## 🧾 Submission example
 
 ```json
 {
-    "group_id": "Group_01",
-    "group_name": "Team Alpha",
-    "metrics": {
-        "ate": 2.5335,
-        "rpe": 1.7309,
-        "scale_error": 8.38
-    },
-    "submission_date": "2024-12-22"
+  "group_id": "Group_01",
+  "group_name": "Team Alpha",
+  "metrics": {
+    "ate_rmse_m": 88.2281,
+    "rpe_trans_drift_m_per_m": 2.04084,
+    "rpe_rot_drift_deg_per_100m": 76.69911,
+    "completeness_pct": 95.73
+  },
+  "submission_date": "2026-01-11"
 }
 ```
 
-Template file: [submission_template.json](./submission_template.json)
+## ❓ FAQ
 
----
+### Q1: Can I submit `KeyFrameTrajectory.txt`?
 
-## 🌐 Leaderboard Website & Baseline
+No. Use `CameraTrajectory.txt` (full-frame trajectory). Keyframe-only trajectories distort completeness and drift-rate metrics.
 
-> **📢 The leaderboard submission website and baseline results will be announced later.**
->
-> Students will be able to upload their JSON submission files to the website, which will automatically parse the metrics and display real-time rankings.
+### Q2: evo says “Found no matching timestamps”
 
-### Baseline Results (Reference)
+Common causes:
 
-| Metric | Baseline Value |
-|--------|---------------|
-| **ATE** | 2.5335 m |
-| **RPE** | 1.7309 m |
-| **Scale Error** | 8.38% |
+- You evaluated with the wrong ground truth file.
+- Your trajectory timestamps are not in seconds (e.g., frame indices).
+- `t_max_diff` is too small (the leaderboard uses 0.1 s).
 
-*These baseline results are from the default ORB-SLAM3 configuration without optimization.*
+## 🌐 Website & Baseline
+
+The leaderboard website and baseline results will be announced by the instructor.
 
