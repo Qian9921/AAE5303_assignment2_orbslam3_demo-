@@ -33,18 +33,17 @@
 
 ## 📊 Executive Summary
 
-This report presents the implementation and evaluation of **Monocular Visual Odometry (VO)** using the **ORB-SLAM3** framework on the **HKisland_GNSS03** UAV aerial imagery dataset. The project evaluates trajectory accuracy against RTK ground truth using three standard academic metrics.
+This report presents the implementation and evaluation of **Monocular Visual Odometry (VO)** using the **ORB-SLAM3** framework on the **HKisland_GNSS03** UAV aerial imagery dataset. The project evaluates trajectory accuracy against RTK ground truth using **four parallel, monocular-appropriate metrics** computed with the `evo` toolkit.
 
 ### Key Results
 
 | Metric | Value | Description |
 |--------|-------|-------------|
-| **ATE RMSE** | 2.5335 m | Absolute Trajectory Error |
-| **RPE Trans RMSE** | 1.7309 m | Relative Pose Error (10 frames) |
-| **Scale Error** | 8.38% | Monocular Scale Drift |
-| **Keyframes** | 620 | Output keyframe count |
-| **Matched Poses** | 328 / 619 (53.0%) | Ground truth association rate |
-| **Trajectory Length** | ~1,900 m | Total distance traveled |
+| **ATE RMSE** | **132.1547 m** | Global accuracy after Sim(3) alignment (scale corrected) |
+| **RPE Trans Drift** | **2.8701 m/m** | Translation drift rate (mean error per meter, delta=10 m) |
+| **RPE Rot Drift** | **173.3319 deg/100m** | Rotation drift rate (mean angle per 100 m, delta=10 m) |
+| **Completeness** | **87.01%** | Matched poses / total ground-truth poses (1701 / 1955) |
+| **Estimated poses** | 2,826 | Trajectory poses in `CameraTrajectory.txt` |
 
 ---
 
@@ -71,15 +70,15 @@ This assignment focuses on **Monocular VO mode**, which:
 1. Implement monocular Visual Odometry using ORB-SLAM3
 2. Process UAV aerial imagery from the HKisland_GNSS03 dataset
 3. Extract RTK (Real-Time Kinematic) GPS data as ground truth
-4. Evaluate trajectory accuracy using three academic metrics
+4. Evaluate trajectory accuracy using four parallel metrics appropriate for monocular VO
 5. Document the complete workflow for reproducibility
 
 ### Scope
 
 This assignment evaluates:
-- **ATE (Absolute Trajectory Error)**: Global trajectory accuracy
-- **RPE (Relative Pose Error)**: Local consistency and drift rate
-- **Scale Error**: Monocular scale estimation accuracy
+- **ATE (Absolute Trajectory Error)**: Global trajectory accuracy after Sim(3) alignment (monocular-friendly)
+- **RPE drift rates (translation + rotation)**: Local consistency (drift per traveled distance)
+- **Completeness**: Robustness / coverage (how much of the sequence is successfully tracked and evaluated)
 
 ---
 
@@ -116,7 +115,7 @@ $$ATE_{RMSE} = \sqrt{\frac{1}{N}\sum_{i=1}^{N}\|\mathbf{p}_{est}^i - \mathbf{p}_
 
 **Reference**: Sturm et al., "A Benchmark for the Evaluation of RGB-D SLAM Systems", IROS 2012
 
-#### 2. RPE (Relative Pose Error)
+#### 2. RPE (Relative Pose Error) – Drift Rates
 
 Measures local consistency by comparing relative transformations:
 
@@ -126,13 +125,26 @@ where $\Delta\mathbf{p} = \mathbf{p}(t+\Delta) - \mathbf{p}(t)$
 
 **Reference**: Geiger et al., "Vision meets Robotics: The KITTI Dataset", IJRR 2013
 
-#### 3. Scale Error
+We report drift as **rates** that are easier to interpret and compare across methods:
 
-For monocular VO, measures scale estimation accuracy:
+- **Translation drift rate** (m/m): \( \text{RPE}_{trans,mean} / \Delta d \)
+- **Rotation drift rate** (deg/100m): \( (\text{RPE}_{rot,mean} / \Delta d) \times 100 \)
 
-$$Scale_{error} = |1 - \frac{L_{est}}{L_{gt}}| \times 100\%$$
+where \(\Delta d\) is a distance interval in meters (e.g., 10 m).
 
-where $L$ is the total trajectory path length.
+#### 3. Completeness
+
+Completeness measures how many ground-truth poses can be associated and evaluated:
+
+$$Completeness = \frac{N_{matched}}{N_{gt}} \times 100\%$$
+
+#### Why these metrics (and why Sim(3) alignment)?
+
+Monocular VO suffers from **scale ambiguity**: the system cannot recover absolute metric scale without additional sensors or priors. Therefore:
+
+- **All error metrics are computed after Sim(3) alignment** (rotation + translation + scale) so that accuracy reflects **trajectory shape** and **drift**, not an arbitrary global scale factor.
+- **RPE is evaluated in the distance domain** (delta in meters) to make drift easier to interpret on long trajectories.
+- **Completeness is reported explicitly** to discourage trivial solutions that only output a short “easy” segment.
 
 ### Trajectory Alignment
 
@@ -141,6 +153,75 @@ We use Sim(3) (7-DOF) alignment to optimally align estimated trajectory to groun
 - **3-DOF Translation**: Align trajectory origins
 - **3-DOF Rotation**: Align trajectory orientations
 - **1-DOF Scale**: Compensate for monocular scale ambiguity
+
+### Evaluation Protocol (Recommended)
+
+This section describes the **exact** evaluation protocol used in this report. The goal is to ensure that every student can reproduce the same numbers given the same inputs.
+
+#### Inputs
+
+- **Ground truth**: `ground_truth.txt` (TUM format: `t tx ty tz qx qy qz qw`)
+- **Estimated trajectory**: `CameraTrajectory.txt` (TUM format)
+- **Association threshold**: `t_max_diff = 0.1 s`
+  - This dataset contains RTK at ~5 Hz and images at ~10 Hz.
+  - A threshold of 0.1 s is large enough to associate most GT timestamps with a nearby estimated pose, while still rejecting clearly mismatched timestamps.
+- **Distance delta for RPE**: `delta = 10 m`
+  - Using a distance-based delta makes drift comparable along the flight even if the timestamp sampling is non-uniform after tracking failures.
+
+#### Step 1 — ATE with Sim(3) alignment (scale corrected)
+
+```bash
+evo_ape tum ground_truth.txt CameraTrajectory.txt \
+  --align --correct_scale \
+  --t_max_diff 0.1 -va
+```
+
+We report **ATE RMSE (m)** as the primary global accuracy metric.
+
+#### Step 2 — RPE (translation + rotation) in the distance domain
+
+```bash
+# Translation RPE over 10 m (meters)
+evo_rpe tum ground_truth.txt CameraTrajectory.txt \
+  --align --correct_scale \
+  --t_max_diff 0.1 \
+  --delta 10 --delta_unit m \
+  --pose_relation trans_part -va
+
+# Rotation RPE over 10 m (degrees)
+evo_rpe tum ground_truth.txt CameraTrajectory.txt \
+  --align --correct_scale \
+  --t_max_diff 0.1 \
+  --delta 10 --delta_unit m \
+  --pose_relation angle_deg -va
+```
+
+We convert evo’s mean RPE over 10 m into drift rates:
+
+- **RPE translation drift (m/m)** = `RPE_trans_mean_m / 10`
+- **RPE rotation drift (deg/100m)** = `(RPE_rot_mean_deg / 10) * 100`
+
+#### Step 3 — Completeness
+
+Completeness measures how much of the sequence can be evaluated:
+
+```text
+Completeness (%) = matched_poses / gt_poses * 100
+```
+
+Here, `matched_poses` is the number of pose pairs successfully associated by evo under `t_max_diff`.
+
+#### Practical Notes (Common Pitfalls)
+
+- **Use the correct trajectory file**:
+  - `CameraTrajectory.txt` contains *all tracked frames* and typically yields higher completeness.
+  - `KeyFrameTrajectory.txt` contains only keyframes and can severely reduce completeness and distort drift estimates.
+- **Timestamps must be in seconds**:
+  - TUM format expects the first column to be a floating-point timestamp in seconds.
+  - If you accidentally write frame indices as timestamps, `evo` will fail to associate trajectories.
+- **Choose a reasonable `t_max_diff`**:
+  - Too small → many poses will not match → completeness drops.
+  - Too large → wrong matches may slip in → metrics become unreliable.
 
 ---
 
@@ -210,7 +291,13 @@ Camera.k3: -0.0627
 Camera.width: 2448
 Camera.height: 2048
 Camera.fps: 10.0
+Camera.RGB: 0  # OpenCV images are typically BGR by default
 ```
+
+**Note on ORB-SLAM3 settings format**:
+
+- In ORB-SLAM3 `File.version: "1.0"` settings files, the intrinsics are typically stored as `Camera1.fx`, `Camera1.fy`, etc. (see `Examples/Monocular/HKisland_Mono.yaml` in the main repo).
+- This demo includes `docs/camera_config.yaml` as a minimal, human-readable reference of the same calibration values.
 
 ### ORB Feature Extraction Parameters
 
@@ -222,14 +309,9 @@ Camera.fps: 10.0
 | `iniThFAST` | 20 | Initial FAST threshold |
 | `minThFAST` | 7 | Minimum FAST threshold |
 
-### Running Command
+### Running ORB-SLAM3 (example)
 
-```bash
-./Examples/Monocular/mono_tum \
-    Vocabulary/ORBvoc.txt \
-    Examples/Monocular/DJI_Camera.yaml \
-    data/extracted_data
-```
+This report assumes you have already generated a TUM-format trajectory file (e.g., `CameraTrajectory.txt` or `KeyFrameTrajectory.txt`) from ORB-SLAM3.
 
 ---
 
@@ -243,29 +325,24 @@ VISUAL ODOMETRY EVALUATION RESULTS
 ================================================================================
 
 Ground Truth: RTK trajectory (1,955 poses)
-Estimated:    ORB-SLAM3 keyframes (619 poses)
-Matched Poses: 328 / 619 (53.0%)
+Estimated:    ORB-SLAM3 camera trajectory (2,826 poses)
+Matched Poses: 1,701 / 1,955 (87.01%)  ← Completeness
 
 METRIC 1: ATE (Absolute Trajectory Error)
 ────────────────────────────────────────
-RMSE:   2.5335 m    ← Primary metric
-Mean:   2.3019 m
-Median: 2.0145 m
-Std:    1.0581 m
-Min:    0.9402 m
-Max:    5.9473 m
+RMSE:   132.1547 m
+Mean:   114.6344 m
+Std:    65.7558 m
 
-METRIC 2: RPE (Relative Pose Error, delta=10 frames)
+METRIC 2: RPE Translation Drift (distance-based, delta=10 m)
 ────────────────────────────────────────
-Trans RMSE:   1.7309 m    ← Primary metric
-Trans Mean:   1.1978 m
-Trans Median: 0.9636 m
-Trans Std:    1.2496 m
+Mean translational RPE over 10 m: 28.7014 m
+Translation drift rate:           2.8701 m/m
 
-METRIC 3: Scale Error
+METRIC 3: RPE Rotation Drift (distance-based, delta=10 m)
 ────────────────────────────────────────
-Scale Ratio: 0.9162
-Scale Drift: 8.38%    ← Primary metric
+Mean rotational RPE over 10 m: 17.3332 deg
+Rotation drift rate:        173.3319 deg/100m
 
 ================================================================================
 ```
@@ -274,17 +351,19 @@ Scale Drift: 8.38%    ← Primary metric
 
 | Parameter | Value |
 |-----------|-------|
-| **Estimated Scale** | 1.0857 |
-| **Translation** | [-0.486, 0.634, 0.909] m |
-| **Association Rate** | 53.0% |
+| **Sim(3) scale correction** | 6.5944 |
+| **Sim(3) translation** | [-45.426, -95.559, 36.060] m |
+| **Association threshold** | \(t_{max\_diff}\) = 0.1 s |
+| **Association rate (Completeness)** | 87.01% |
 
 ### Performance Analysis
 
 | Metric | Value | Grade | Interpretation |
 |--------|-------|-------|----------------|
-| **ATE RMSE** | 2.53 m | C+ | Moderate accuracy; drift present |
-| **RPE RMSE** | 1.73 m | C+ | Local tracking issues observed |
-| **Scale Error** | 8.38% | B+ | Good scale estimation |
+| **ATE RMSE** | 132.15 m | F | Very large global error after alignment |
+| **RPE Trans Drift** | 2.87 m/m | D | Large local drift per traveled distance |
+| **RPE Rot Drift** | 173.33 deg/100m | F | Severe orientation drift |
+| **Completeness** | 87.01% | B | Many poses can be evaluated, but accuracy is low |
 
 ---
 
@@ -294,11 +373,14 @@ Scale Drift: 8.38%    ← Primary metric
 
 ![Trajectory Evaluation](figures/trajectory_evaluation.png)
 
-The visualization includes:
-1. **Top-Left**: 2D trajectory before alignment (shows scale difference)
-2. **Top-Right**: 2D trajectory after Sim(3) alignment
-3. **Bottom-Left**: ATE error histogram distribution
-4. **Bottom-Right**: ATE error along trajectory (temporal evolution)
+This figure is generated from the same inputs used for evaluation (`ground_truth.txt` and `CameraTrajectory.txt`) and includes:
+
+1. **Top-Left**: 2D trajectory before alignment (matched poses only). This reveals scale/rotation mismatch typical for monocular VO.
+2. **Top-Right**: 2D trajectory after Sim(3) alignment (scale corrected). Remaining discrepancy reflects drift and local tracking errors.
+3. **Bottom-Left**: Distribution of ATE translation errors (meters) over all matched poses.
+4. **Bottom-Right**: ATE translation error as a function of the matched pose index (highlights where drift accumulates).
+
+**Reproducibility**: the figure can be regenerated using `scripts/generate_report_figures.py` together with the `--save_results` output from `evo_ape`.
 
 ---
 
@@ -306,19 +388,17 @@ The visualization includes:
 
 ### Strengths
 
-1. **Good Scale Estimation**: 8.38% scale error is acceptable for monocular VO, demonstrating reasonable scale observability from camera motion.
+1. **High evaluation coverage**: 87% completeness indicates that a large portion of the ground-truth poses can be associated and evaluated.
 
-2. **Complete Trajectory**: The system successfully processed the entire ~6.5-minute sequence without complete failure.
-
-3. **Reasonable Drift Rate**: 0.13% relative trajectory error (ATE/distance) is within acceptable range for pure VO.
+2. **End-to-end pipeline**: The system produces a usable TUM trajectory and can be evaluated reproducibly with standard tooling.
 
 ### Limitations
 
 1. **Tracking Instability**: Frequent "Fail to track local map!" errors observed, leading to multiple map resets (2 maps created).
 
-2. **Low Association Rate**: Only 53% of keyframes matched with ground truth, indicating significant tracking failures.
+2. **Large drift**: Both translation and rotation drift rates are high, indicating unstable local tracking and/or poor geometric constraints.
 
-3. **No Loop Closure**: Pure VO mode without relocalization accumulates drift over long trajectories.
+3. **No loop closure**: Pure VO mode without loop closure or relocalization accumulates drift over long trajectories.
 
 ### Error Sources
 
@@ -335,9 +415,9 @@ The visualization includes:
 This assignment demonstrates monocular Visual Odometry implementation using ORB-SLAM3 on UAV aerial imagery. Key findings:
 
 1. ✅ **System Operation**: ORB-SLAM3 successfully processes 3,833 images over 1.9 km trajectory
-2. ✅ **Scale Estimation**: 8.38% scale error demonstrates good monocular scale estimation
-3. ⚠️ **Tracking Stability**: Frequent tracking failures indicate need for parameter optimization
-4. ⚠️ **Drift Accumulation**: 2.5m ATE shows typical monocular VO drift characteristics
+2. ✅ **Evaluation coverage**: 87.01% completeness shows that many poses can be evaluated against RTK ground truth
+3. ⚠️ **Tracking stability**: Frequent tracking failures indicate the need for parameter tuning and stronger robustness measures
+4. ❌ **Accuracy**: The current baseline exhibits very large global error and drift rates on this sequence
 
 ### Recommendations for Improvement
 
@@ -399,13 +479,41 @@ python3 extract_images_final.py HKisland_GNSS03.bag --output extracted_data
     data/extracted_data
 
 # 3. Extract RTK ground truth
-python3 extract_rtk_groundtruth.py HKisland_GNSS03.bag --output rtk_groundtruth.txt
+python3 extract_rtk_groundtruth.py HKisland_GNSS03.bag --output ground_truth.txt
 
 # 4. Evaluate trajectory
-python3 evaluate_vo_accuracy.py \
-    --groundtruth rtk_groundtruth.txt \
-    --estimated KeyFrameTrajectory.txt \
-    --output-dir evaluation_results
+python3 scripts/evaluate_vo_accuracy.py \
+    --groundtruth ground_truth.txt \
+    --estimated CameraTrajectory.txt \
+    --t-max-diff 0.1 \
+    --delta-m 10 \
+    --workdir evaluation_results \
+    --json-out evaluation_results/metrics.json
+```
+
+### D. Native evo Commands (Recommended)
+
+If you prefer to run evo directly (no custom scripts), use:
+
+```bash
+# ATE (Sim(3) alignment + scale correction)
+evo_ape tum ground_truth.txt CameraTrajectory.txt \
+  --align --correct_scale \
+  --t_max_diff 0.1 -va
+
+# RPE translation (distance-based, delta = 10 m)
+evo_rpe tum ground_truth.txt CameraTrajectory.txt \
+  --align --correct_scale \
+  --t_max_diff 0.1 \
+  --delta 10 --delta_unit m \
+  --pose_relation trans_part -va
+
+# RPE rotation angle (degrees, distance-based, delta = 10 m)
+evo_rpe tum ground_truth.txt CameraTrajectory.txt \
+  --align --correct_scale \
+  --t_max_diff 0.1 \
+  --delta 10 --delta_unit m \
+  --pose_relation angle_deg -va
 ```
 
 ### C. Output Trajectory Format (TUM)

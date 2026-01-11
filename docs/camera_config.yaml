@@ -27,7 +27,7 @@ Camera.height: 2048
 Camera.fps: 10.0
 
 # Color order of the images (0: BGR, 1: RGB. It is ignored if grayscale)
-Camera.RGB: 1
+Camera.RGB: 0
 
 #--------------------------------------------------------------------------------------------
 # ORB Parameters
