@@ -14,7 +14,7 @@ If you are looking for a “how to run ORB-SLAM3 without pitfalls” guide, see:
 
 Submit **one JSON file per group**:
 
-- File name: `{GroupID}_leaderboard.json`
+- File name: `{GroupName}_leaderboard.json`
 - Format template: `submission_template.json`
 
 The leaderboard will parse your JSON file and display rankings **separately for each metric**.
@@ -97,15 +97,14 @@ See `LEADERBOARD_SUBMISSION_GUIDE.md` for:
 
 ```json
 {
-  "group_id": "Group_01",
   "group_name": "Team Alpha",
+  "project_private_repo_url": "https://github.com/yourusername/project.git",
   "metrics": {
     "ate_rmse_m": 88.2281,
     "rpe_trans_drift_m_per_m": 2.04084,
     "rpe_rot_drift_deg_per_100m": 76.69911,
     "completeness_pct": 95.73
-  },
-  "submission_date": "2026-01-11"
+  }
 }
 ```
 
@@ -125,5 +124,12 @@ Common causes:
 
 ## 🌐 Website & Baseline
 
-The leaderboard website and baseline results will be announced by the instructor.
+Leaderboard URL: `https://qian9921.github.io/leaderboard_web/`
+
+Baseline (AMtown):
+
+- **ATE RMSE**: 88.2281 m
+- **RPE Trans Drift**: 2.04084 m/m
+- **RPE Rot Drift**: 76.69911 deg/100m
+- **Completeness**: 95.73 %
 

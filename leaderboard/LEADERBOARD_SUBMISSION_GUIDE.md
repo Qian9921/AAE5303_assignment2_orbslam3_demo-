@@ -11,6 +11,8 @@ The leaderboard expects an estimated trajectory in **TUM format** and computes m
 | MARS-LVIG Dataset | https://mars.hku.hk/dataset.html |
 | UAVScenes GitHub | https://github.com/sijieaaa/UAVScenes |
 
+All sequences used in this course are sourced from the MARS-LVIG dataset.
+
 ---
 
 ## 📊 Evaluation Metrics
@@ -39,15 +41,14 @@ Submit your results using the following JSON format:
 
 ```json
 {
-    "group_id": "YOUR_GROUP_ID",
-    "group_name": "Your Group Name",
-    "metrics": {
-        "ate_rmse_m": 88.2281,
-        "rpe_trans_drift_m_per_m": 2.04084,
-        "rpe_rot_drift_deg_per_100m": 76.69911,
-        "completeness_pct": 95.73
-    },
-    "submission_date": "YYYY-MM-DD"
+  "group_name": "Team Alpha",
+  "project_private_repo_url": "https://github.com/yourusername/project.git",
+  "metrics": {
+    "ate_rmse_m": 88.2281,
+    "rpe_trans_drift_m_per_m": 2.04084,
+    "rpe_rot_drift_deg_per_100m": 76.69911,
+    "completeness_pct": 95.73
+  }
 }
 ```
 
@@ -55,19 +56,18 @@ Submit your results using the following JSON format:
 
 | Field | Type | Description | Example |
 |-------|------|-------------|---------|
-| `group_id` | string | Your group ID | `"Group_01"` |
-| `group_name` | string | Your group name | `"Team Alpha"` |
+| `group_name` | string | Your group name (as shown on the leaderboard) | `"Team Alpha"` |
+| `project_private_repo_url` | string | Private Git repository URL for your project | `"https://github.com/yourusername/project.git"` |
 | `metrics.ate_rmse_m` | number | ATE RMSE in meters | `88.2281` |
 | `metrics.rpe_trans_drift_m_per_m` | number | Translation drift rate | `2.04084` |
 | `metrics.rpe_rot_drift_deg_per_100m` | number | Rotation drift rate | `76.69911` |
 | `metrics.completeness_pct` | number | Completeness percentage | `95.73` |
-| `submission_date` | string | Date (YYYY-MM-DD) | `"2024-12-22"` |
 
 ### File Naming Convention
 
-`{GroupID}_leaderboard.json`
+`{GroupName}_leaderboard.json`
 
-Example: `Group_01_leaderboard.json`
+Example: `Team_Alpha_leaderboard.json`
 
 ---
 
@@ -79,8 +79,6 @@ Example: `Group_01_leaderboard.json`
 For a practical “do this, avoid that” guide, see:
 
 - `ORB_SLAM3_TIPS.md`
-
-This guide includes repository-specific pointers (e.g., the `Mono_Compressed` ROS node path) and the most common failure modes.
 
 ---
 
@@ -151,5 +149,16 @@ Here, `matched_poses` is the number of pose pairs successfully associated by evo
 
 ## 🌐 Leaderboard Website & Baseline
 
-> **📢 The leaderboard submission website and baseline results will be announced later.**
+### Website
+
+Leaderboard URL: `https://qian9921.github.io/leaderboard_web/`
+
+### Baseline (AMtown sequence)
+
+The following baseline is computed on the AMtown sequence using the fixed evaluation protocol above:
+
+- `ate_rmse_m`: **88.2281**
+- `rpe_trans_drift_m_per_m`: **2.04084**
+- `rpe_rot_drift_deg_per_100m`: **76.69911**
+- `completeness_pct`: **95.73**
 

@@ -205,6 +205,11 @@ Use the template:
 
 - `submission_template.json`
 
+Required fields:
+
+- `group_name`
+- `project_private_repo_url`
+
 Metrics to report:
 
 - `ate_rmse_m`
