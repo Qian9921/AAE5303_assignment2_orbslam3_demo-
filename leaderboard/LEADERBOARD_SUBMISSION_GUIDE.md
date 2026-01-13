@@ -71,6 +71,75 @@ Example: `Team_Alpha_leaderboard.json`
 
 ---
 
+## 💡 How to Generate Submission
+
+### Step 1: Run ORB-SLAM3 and export your trajectory
+
+1. Run your monocular VO pipeline (ORB-SLAM3).
+2. Export **full-frame** trajectory as `CameraTrajectory.txt` (not keyframes).
+3. Ensure the trajectory is valid **TUM format**: `t tx ty tz qx qy qz qw` with timestamps in seconds.
+
+If you are unsure about export pitfalls, see:
+
+- `ORB_SLAM3_TIPS.md`
+
+### Step 2: Compute metrics (matches leaderboard protocol)
+
+Option A (recommended): use the provided evaluation script in this repository:
+
+```bash
+# Run from the repository root (so "scripts/" exists)
+python scripts/evaluate_vo_accuracy.py \
+  --groundtruth ground_truth.txt \
+  --estimated CameraTrajectory.txt \
+  --t-max-diff 0.1 \
+  --delta-m 10 \
+  --workdir evaluation_results \
+  --json-out evaluation_results/metrics.json
+```
+
+Option B: use native `evo` CLI commands (see the Metric Calculation section below).
+
+### Step 3: Create `{GroupName}_leaderboard.json`
+
+Fill the four metrics in the required JSON schema (see `submission_template.json`):
+
+- `ate_rmse_m`
+- `rpe_trans_drift_m_per_m`
+- `rpe_rot_drift_deg_per_100m`
+- `completeness_pct`
+
+### Step 4: Verify JSON format (recommended)
+
+```python
+import json
+
+with open("Team_Alpha_leaderboard.json", "r", encoding="utf-8") as f:
+    submission = json.load(f)
+
+assert "group_name" in submission, "Missing 'group_name'"
+assert "project_private_repo_url" in submission, "Missing 'project_private_repo_url'"
+assert "metrics" in submission, "Missing 'metrics'"
+
+metrics = submission["metrics"]
+required = [
+    "ate_rmse_m",
+    "rpe_trans_drift_m_per_m",
+    "rpe_rot_drift_deg_per_100m",
+    "completeness_pct",
+]
+for key in required:
+    assert key in metrics, f"Missing metrics.{key}"
+    assert isinstance(metrics[key], (int, float)), f"metrics.{key} must be a number"
+
+assert submission["project_private_repo_url"].startswith("https://github.com/"), "Invalid GitHub URL"
+assert submission["project_private_repo_url"].endswith(".git"), "URL should end with .git"
+
+print("✅ Submission format is valid!")
+print(f"Group: {submission['group_name']}")
+print(f"ATE RMSE: {metrics['ate_rmse_m']} m")
+```
+
 ## ✅ Trajectory Requirements (read this before evaluating)
 
 - Use **`CameraTrajectory.txt`** (full-frame trajectory), not `KeyFrameTrajectory.txt`.
@@ -146,6 +215,37 @@ completeness_pct = matched_poses / gt_poses * 100.0
 Here, `matched_poses` is the number of pose pairs successfully associated by evo under `t_max_diff`.
 
 ---
+
+## 📊 Baseline Results
+
+| Metric | Baseline Value |
+|--------|----------------|
+| **ATE RMSE** | **88.2281 m** |
+| **RPE Trans Drift** | **2.04084 m/m** |
+| **RPE Rot Drift** | **76.69911 deg/100m** |
+| **Completeness** | **95.73 %** |
+
+---
+
+## 🧠 Tips for Improvement
+
+### Easy (fix common mistakes first)
+
+1. Evaluate `CameraTrajectory.txt` (full-frame), not `KeyFrameTrajectory.txt`.
+2. Verify timestamps are **seconds** and monotonically increasing.
+3. Confirm camera intrinsics / distortion and the RGB/BGR setting in your camera config.
+
+### Medium (typical VO tuning)
+
+4. Increase ORB feature count (e.g., `nFeatures` ≈ 2000–2500).
+5. Lower FAST thresholds to detect more features in low-texture regions.
+6. Reduce motion blur and improve image quality (sharp frames = better tracking).
+
+### Advanced (if permitted by your setup)
+
+7. Use stereo or visual-inertial mode if the assignment allows it.
+8. Use relocalization / loop-closure features when running SLAM (if allowed by the evaluation protocol).
+9. Add image preprocessing (contrast normalization) for challenging lighting.
 
 ## 🌐 Leaderboard Website & Baseline
 
