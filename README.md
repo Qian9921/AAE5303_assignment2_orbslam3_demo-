@@ -535,7 +535,7 @@ evo_rpe tum ground_truth.txt CameraTrajectory.txt \
 
 *The Hong Kong Polytechnic University*
 
-December 2024
+Jan 2026
 
 </div>
 
