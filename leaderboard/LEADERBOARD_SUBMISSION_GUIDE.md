@@ -8,10 +8,10 @@ The leaderboard expects an estimated trajectory in **TUM format** and computes m
 
 | Resource | Link |
 |----------|------|
-| MARS-LVIG Dataset | https://mars.hku.hk/dataset.html |
+| MARS-LVIG Dataset (AMtown02) | https://mars.hku.hk/dataset.html |
 | UAVScenes GitHub | https://github.com/sijieaaa/UAVScenes |
 
-All sequences used in this course are sourced from the MARS-LVIG dataset.
+All sequences used in this course are sourced from the **official MARS-LVIG AMtown02** dataset.
 
 ---
 
@@ -253,9 +253,9 @@ Here, `matched_poses` is the number of pose pairs successfully associated by evo
 
 Leaderboard URL: `https://qian9921.github.io/leaderboard_web/`
 
-### Baseline (AMtown sequence)
+### Baseline (AMtown02 sequence)
 
-The following baseline is computed on the AMtown sequence using the fixed evaluation protocol above:
+The following baseline is computed on the AMtown02 sequence using the fixed evaluation protocol above:
 
 - `ate_rmse_m`: **88.2281**
 - `rpe_trans_drift_m_per_m`: **2.04084**

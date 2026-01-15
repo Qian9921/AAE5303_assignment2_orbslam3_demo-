@@ -21,10 +21,10 @@ The leaderboard evaluates your submission by comparing:
 
 | Resource | Link |
 |----------|------|
-| MARS-LVIG Dataset | https://mars.hku.hk/dataset.html |
+| MARS-LVIG Dataset (AMtown02) | https://mars.hku.hk/dataset.html |
 | UAVScenes GitHub | https://github.com/sijieaaa/UAVScenes |
 
-All sequences used in this course are sourced from the MARS-LVIG dataset.
+All sequences used in this course are sourced from the **official MARS-LVIG AMtown02** dataset.
 
 ## 📌 What you submit
 
@@ -309,11 +309,11 @@ Common causes:
 
 | Rank | Group | ATE RMSE ↓ | RPE Trans Drift ↓ | RPE Rot Drift ↓ | Completeness ↑ | Date |
 |------|-------|------------|-------------------|-----------------|----------------|------|
-| - | **Baseline (AMtown)** | 88.2281 m | 2.04084 m/m | 76.69911 deg/100m | 95.73 % | — |
+| - | **Baseline (AMtown02)** | 88.2281 m | 2.04084 m/m | 76.69911 deg/100m | 95.73 % | — |
 
 ### 📊 Baseline Details
 
-Baseline numbers are computed on the **AMtown** sequence using the fixed evaluation protocol:
+Baseline numbers are computed on the **AMtown02** sequence using the fixed evaluation protocol:
 
 - `t_max_diff = 0.1 s`
 - Sim(3) alignment with scale correction (`--align --correct_scale`)
@@ -329,7 +329,7 @@ The leaderboard ranks teams **separately for each metric** (no weighting).
 
 Leaderboard URL: `https://qian9921.github.io/leaderboard_web/`
 
-Baseline (AMtown):
+Baseline (AMtown02):
 
 - **ATE RMSE**: 88.2281 m
 - **RPE Trans Drift**: 2.04084 m/m
